@@ -1,20 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-================================================================================
- SIVREP CLOUD — Sistema Institucional de Validación de Repuestos
-              y Levantamiento de Planos Eléctricos (STREAMLIT EDITION)
-================================================================================
-Versión    : 3.1.0-Cloud
-Plataforma : Streamlit Cloud / Web
-Python     : 3.9+
-
-DEPENDENCIAS
-────────────
-  pip install streamlit pandas openpyxl PyPDF2 pdfplumber pytesseract pillow 
-              opencv-python-headless numpy matplotlib seaborn 
-              fuzzywuzzy python-Levenshtein PyMuPDF plotly
-================================================================================
+SIVREP CLOUD v3.1.1 - Sistema Institucional de Validacion de Repuestos
+Plataforma: Streamlit Cloud / Web
 """
 
 import os
@@ -23,12 +11,9 @@ import re
 import json
 import logging
 import io
-import base64
 from datetime import datetime
 from pathlib import Path
-from collections import defaultdict
-from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional, Any, Callable
+from typing import List, Dict, Tuple, Optional, Any
 import traceback
 import time
 
@@ -36,14 +21,14 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURACIÓN GLOBAL
-# ═══════════════════════════════════════════════════════════════════════════════
+# Configuracion
+from dataclasses import dataclass
+
 @dataclass(frozen=True)
 class AppConfig:
     APP_NAME: str = "SIVREP CLOUD"
-    VERSION: str = "3.1.0-Cloud"
-    ORGANIZATION: str = "Departamento de Ingeniería"
+    VERSION: str = "3.1.1"
+    ORGANIZATION: str = "Departamento de Ingenieria"
     DEFAULT_THRESHOLD: int = 75
     MAX_WORDS_MATCH: int = 4
     OUTPUT_DIR: str = "output"
@@ -63,29 +48,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SIVREP")
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# PALETA DE COLORES INSTITUCIONAL
-# ═══════════════════════════════════════════════════════════════════════════════
-class Palette:
-    BG_PRIMARY   = "#f0f4f8"
-    BG_SECONDARY = "#ffffff"
-    BG_TERTIARY  = "#e2e8f0"
-    BG_HEADER    = "#1e3a5f"
-    PRIMARY      = "#2b6cb0"
-    PRIMARY_HOVER= "#2c5282"
-    ACCENT       = "#3182ce"
-    TEXT_PRIMARY   = "#1a202c"
-    TEXT_SECONDARY = "#4a5568"
-    TEXT_MUTED     = "#718096"
-    SUCCESS      = "#276749"
-    DANGER       = "#c53030"
-    WARNING      = "#c05621"
-    INFO         = "#2b6cb0"
-    BORDER       = "#cbd5e0"
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CSS PERSONALIZADO
-# ═══════════════════════════════════════════════════════════════════════════════
+# CSS Institucional
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -110,21 +73,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# IMPORTACIÓN DE LIBRERÍAS CON MANEJO GRACEFUL
-# ═══════════════════════════════════════════════════════════════════════════════
+# Importaciones con manejo graceful
 PANDAS_OK = True
-PDF_OK = PIL_OK = TESSERACT_OK = CV2_OK = FUZZY_OK = False
-MATPLOTLIB_OK = SEABORN_OK = PYMUPDF_OK = PLOTLY_OK = False
+PDF_OK = False
+PIL_OK = False
+TESSERACT_OK = False
+CV2_OK = False
+FUZZY_OK = False
+MATPLOTLIB_OK = False
+SEABORN_OK = False
+PYMUPDF_OK = False
+PLOTLY_OK = False
 
 from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 try:
-    import PyPDF2, pdfplumber
+    import PyPDF2
+    import pdfplumber
     PDF_OK = True
 except ImportError as e:
-    logger.error(f"PyPDF2/pdfplumber no disponibles: {e}")
+    logger.error("PyPDF2/pdfplumber no disponibles: " + str(e))
 
 try:
     import fitz
@@ -136,25 +105,25 @@ try:
     from PIL import Image, ImageEnhance, ImageFilter
     PIL_OK = True
 except ImportError as e:
-    logger.error(f"Pillow no disponible: {e}")
+    logger.error("Pillow no disponible: " + str(e))
 
 try:
     import pytesseract
     TESSERACT_OK = True
 except ImportError as e:
-    logger.error(f"pytesseract no disponible: {e}")
+    logger.error("pytesseract no disponible: " + str(e))
 
 try:
     import cv2
     CV2_OK = True
 except ImportError as e:
-    logger.error(f"OpenCV no disponible: {e}")
+    logger.error("OpenCV no disponible: " + str(e))
 
 try:
     from fuzzywuzzy import fuzz
     FUZZY_OK = True
 except ImportError as e:
-    logger.error(f"fuzzywuzzy no disponible: {e}")
+    logger.error("fuzzywuzzy no disponible: " + str(e))
 
 try:
     import matplotlib
@@ -162,7 +131,7 @@ try:
     import matplotlib.pyplot as plt
     MATPLOTLIB_OK = True
 except ImportError as e:
-    logger.error(f"matplotlib no disponible: {e}")
+    logger.error("matplotlib no disponible: " + str(e))
 
 try:
     import seaborn as sns
@@ -178,11 +147,11 @@ except ImportError:
     logger.warning("Plotly no disponible.")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # UTILIDADES GENERALES
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 class Utils:
-    """Herramientas utilitarias estáticas."""
+    """Herramientas utilitarias estaticas."""
 
     @staticmethod
     def limpiar_texto(texto) -> str:
@@ -253,9 +222,9 @@ class Utils:
         return datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # MOTOR DE LECTURA DE ARCHIVOS
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 class FileReaderEngine:
     """Motor unificado de lectura de archivos maestros."""
 
@@ -273,12 +242,12 @@ class FileReaderEngine:
             df = pd.read_excel(file_obj, sheet_name=hoja, engine="openpyxl")
         df = self._limpiar_df(df)
         self.historial.append({"tipo": "excel", "filas": len(df), "columnas": len(df.columns)})
-        logger.info(f"Excel cargado: {len(df)} filas x {len(df.columns)} columnas")
+        logger.info("Excel cargado: " + str(len(df)) + " filas x " + str(len(df.columns)) + " columnas")
         return df
 
     def read_pdf_tablas(self, file_obj) -> Optional[pd.DataFrame]:
         if not PDF_OK:
-            raise RuntimeError("Librerías PDF no disponibles.")
+            raise RuntimeError("Librerias PDF no disponibles.")
         logger.info("Extrayendo tablas de PDF")
         tablas = []
         with pdfplumber.open(file_obj) as pdf:
@@ -307,7 +276,7 @@ class FileReaderEngine:
             for i in range(len(doc)):
                 pagina = doc.load_page(i)
                 pix = pagina.get_pixmap(matrix=mat)
-                out = Path(CONFIG.TEMP_DIR) / f"pdf_page_{i:03d}.png"
+                out = Path(CONFIG.TEMP_DIR) / ("pdf_page_" + str(i).zfill(3) + ".png")
                 pix.save(str(out))
                 rutas_salida.append(str(out))
             doc.close()
@@ -322,18 +291,18 @@ class FileReaderEngine:
         return df.reset_index(drop=True)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # MOTOR OCR
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 class OCREngine:
-    """Extracción inteligente de TAGs y Modelos desde planos eléctricos."""
+    """Extraccion inteligente de TAGs y Modelos desde planos electricos."""
 
     def __init__(self):
-        self.config_tesseract = f"--psm 6 -l {CONFIG.OCR_LANG}"
+        self.config_tesseract = "--psm 6 -l " + CONFIG.OCR_LANG
         self.patrones = [
             ("TAG_EXPLICITO", r"TAG\s*[:\-]?\s*([A-Z0-9\-]{3,20})"),
             ("TAG_GENERICO", r"([A-Z]{1,4}[-\.]?\d{2,5}[A-Z0-9\-]*)"),
-            ("NPARTE_EXPLICITO", r"N[°\s]*PARTE\s*[:\-]?\s*([A-Z0-9\-]{3,25})"),
+            ("NPARTE_EXPLICITO", r"N[\u00b0\s]*PARTE\s*[:\-]?\s*([A-Z0-9\-]{3,25})"),
             ("PARTNO", r"PART\s*NO\s*[:\-]?\s*([A-Z0-9\-]{3,25})"),
             ("MODELO_EXPLICITO", r"MODELO\s*[:\-]?\s*([A-Z0-9\-\s]{3,30})"),
             ("MODEL_EXPLICITO", r"MODEL\s*[:\-]?\s*([A-Z0-9\-\s]{3,30})"),
@@ -348,7 +317,7 @@ class OCREngine:
             raise RuntimeError("OpenCV no disponible.")
         img = cv2.imread(ruta_imagen, cv2.IMREAD_GRAYSCALE)
         if img is None:
-            raise ValueError(f"No se pudo cargar: {ruta_imagen}")
+            raise ValueError("No se pudo cargar: " + ruta_imagen)
         img = cv2.resize(img, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
         img = cv2.fastNlMeansDenoising(img, None, 10, 7, 21)
         img = cv2.adaptiveThreshold(img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -362,15 +331,14 @@ class OCREngine:
             raise RuntimeError("Tesseract OCR no disponible.")
         if preprocesar and CV2_OK:
             img = self.preprocesar(ruta_imagen)
-            temp = Path(CONFIG.TEMP_DIR) / f"ocr_preproc_{Path(ruta_imagen).stem}.png"
+            temp = Path(CONFIG.TEMP_DIR) / ("ocr_preproc_" + Path(ruta_imagen).stem + ".png")
             cv2.imwrite(str(temp), img)
             return pytesseract.image_to_string(img, config=self.config_tesseract).upper()
         return pytesseract.image_to_string(Image.open(ruta_imagen), config=self.config_tesseract).upper()
 
     def extraer_datos(self, texto: str) -> List[Dict[str, str]]:
         resultados = []
-        lineas = [l.strip() for l in texto.split("
-") if len(l.strip()) > 2]
+        lineas = [l.strip() for l in texto.split("\n") if len(l.strip()) > 2]
         for i, linea in enumerate(lineas):
             tag = None
             modelo = None
@@ -414,7 +382,7 @@ class OCREngine:
         while i < len(palabras) - 1:
             w1, w2 = palabras[i], palabras[i + 1] if i + 1 < len(palabras) else ""
             if re.match(r"^[A-Z]{1,4}[-\.]?\d{2,5}", w1) and Utils.es_codigo_parte(w2):
-                resultados.append({"TAG": w1, "MODELO": w2, "TEXTO_ORIGINAL": f"{w1} {w2}", "METODO_EXTRACCION": "OCR_BLOQUE"})
+                resultados.append({"TAG": w1, "MODELO": w2, "TEXTO_ORIGINAL": w1 + " " + w2, "METODO_EXTRACCION": "OCR_BLOQUE"})
                 i += 2
                 continue
             if Utils.es_codigo_parte(w1) and len(w1) > 5:
@@ -424,7 +392,7 @@ class OCREngine:
         return resultados
 
     def procesar_imagen(self, ruta: str) -> List[Dict[str, str]]:
-        logger.info(f"OCR sobre imagen: {ruta}")
+        logger.info("OCR sobre imagen: " + ruta)
         texto = self.extraer_texto(ruta)
         return self.extraer_datos(texto)
 
@@ -440,16 +408,16 @@ class OCREngine:
                     r["PAGINA_PDF"] = idx + 1
                 todos.extend(res)
             except Exception as e:
-                logger.error(f"Error página {idx + 1}: {e}")
-        logger.info(f"OCR PDF finalizado: {len(todos)} componentes.")
+                logger.error("Error pagina " + str(idx + 1) + ": " + str(e))
+        logger.info("OCR PDF finalizado: " + str(len(todos)) + " componentes.")
         return todos
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # MOTOR FUZZY MATCHING
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 class SparePartMatcher:
-    """Comparación inteligente con múltiples estrategias."""
+    """Comparacion inteligente con multiples estrategias."""
 
     def __init__(self, umbral: int = 75, max_palabras: int = 4, estrategia: str = "weighted"):
         self.umbral = umbral
@@ -462,7 +430,7 @@ class SparePartMatcher:
             "sin_coincidencia": 0,
             "tiempo_seg": 0.0
         }
-        logger.info(f"Matcher listo (umbral={umbral}, estrategia={estrategia}).")
+        logger.info("Matcher listo (umbral=" + str(umbral) + ", estrategia=" + estrategia + ").")
 
     def comparar_uno(self, origen: str, destino: str) -> Tuple[bool, float, str]:
         self.estadisticas["total_comparaciones"] += 1
@@ -490,7 +458,7 @@ class SparePartMatcher:
         score = Utils.calcular_similitud(s, t, self.estrategia)
         if score >= self.umbral:
             self.estadisticas["fuzzy"] += 1
-            return True, round(score, 2), f"fuzzy_{self.estrategia}"
+            return True, round(score, 2), "fuzzy_" + self.estrategia
         self.estadisticas["sin_coincidencia"] += 1
         return False, round(score, 2), "sin_coincidencia"
 
@@ -528,30 +496,30 @@ class SparePartMatcher:
                 "VALOR_DESTINO": best_match,
                 "SCORE": best_score,
                 "METODO": best_metodo,
-                "COINCIDE": "SÍ" if coincide else "NO",
+                "COINCIDE": "SI" if coincide else "NO",
                 "IDX_DESTINO": best_idx if coincide else -1
             }
             for c in df_origen.columns:
-                fila_res[f"SRC_{c}"] = fila[c]
+                fila_res["SRC_" + c] = fila[c]
             resultados.append(fila_res)
 
             if int(idx) % 10 == 0:
                 progress = min((int(idx) + 1) / total, 1.0)
                 progress_bar.progress(progress)
-                status_text.text(f"Progreso: {int(idx) + 1}/{total} ({progress*100:.1f}%)")
+                status_text.text("Progreso: " + str(int(idx) + 1) + "/" + str(total) + " (" + str(round(progress*100, 1)) + "%)")
 
         progress_bar.empty()
         status_text.empty()
         self.estadisticas["tiempo_seg"] = time.time() - t0
-        logger.info(f"Comparación lista en {self.estadisticas['tiempo_seg']:.2f}s")
+        logger.info("Comparacion lista en " + str(round(self.estadisticas["tiempo_seg"], 2)) + "s")
         return pd.DataFrame(resultados)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# MOTOR ESTADÍSTICO
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
+# MOTOR ESTADISTICO
+# =============================================================================
 class StatisticsEngine:
-    """Genera métricas, gráficos y reportes institucionales."""
+    """Genera metricas, graficos y reportes institucionales."""
 
     def __init__(self):
         self.reporte: Dict[str, Any] = {}
@@ -562,7 +530,7 @@ class StatisticsEngine:
         total_o, total_d = len(df_origen), len(df_destino)
         if "COINCIDE" not in df_resultado.columns:
             raise ValueError("DataFrame sin columna COINCIDE")
-        coin = df_resultado[df_resultado["COINCIDE"] == "SÍ"]
+        coin = df_resultado[df_resultado["COINCIDE"] == "SI"]
         no_coin = df_resultado[df_resultado["COINCIDE"] == "NO"]
         metricas = {
             "total_origen": total_o,
@@ -584,19 +552,19 @@ class StatisticsEngine:
         return metricas
 
     def generar_graficos_plotly(self):
-        """Genera gráficos interactivos con Plotly."""
+        """Genera graficos interactivos con Plotly."""
         if not self.reporte:
             return None
 
         fig = make_subplots(
             rows=2, cols=2,
-            subplot_titles=("Distribución de Resultados", "Métricas de Desempeño",
-                           "Métodos de Coincidencia", "Resumen Ejecutivo"),
+            subplot_titles=("Distribucion de Resultados", "Metricas de Desempeno",
+                           "Metodos de Coincidencia", "Resumen Ejecutivo"),
             specs=[[{"type": "pie"}, {"type": "bar"}],
                    [{"type": "bar"}, {"type": "domain"}]]
         )
 
-        # 1. Pie chart
+        # Pie chart
         sizes = [self.reporte["coincidencias"], self.reporte["no_coincidencias"]]
         fig.add_trace(go.Pie(
             labels=["Coincidencias", "No Coincidencias"],
@@ -606,20 +574,20 @@ class StatisticsEngine:
             hole=0.4,
         ), row=1, col=1)
 
-        # 2. Barras horizontales
+        # Barras horizontales
         metricas = ["tasa_exito", "cobertura", "score_promedio"]
         valores = [self.reporte.get(m, 0) for m in metricas]
-        nombres = ["Tasa Éxito (%)", "Cobertura (%)", "Score Promedio"]
+        nombres = ["Tasa Exito (%)", "Cobertura (%)", "Score Promedio"]
         fig.add_trace(go.Bar(
             x=valores,
             y=nombres,
             orientation='h',
             marker_color=["#3182ce", "#805ad5", "#dd6b20"],
-            text=[f"{v:.1f}" for v in valores],
+            text=[str(round(v, 1)) for v in valores],
             textposition="outside",
         ), row=1, col=2)
 
-        # 3. Métodos
+        # Metodos
         if "metodos" in self.reporte:
             met = self.reporte["metodos"]
             fig.add_trace(go.Bar(
@@ -628,16 +596,15 @@ class StatisticsEngine:
                 marker_color="#2b6cb0",
             ), row=2, col=1)
 
-        # 4. Resumen como indicadores
+        # Resumen como indicadores
         fig.add_trace(go.Indicator(
-            mode="number+delta",
+            mode="number",
             value=self.reporte["coincidencias"],
             title={"text": "Coincidencias"},
-            domain={'row': 1, 'column': 1},
         ), row=2, col=2)
 
         fig.update_layout(
-            title_text="SIVREP — Análisis Estadístico de Validación",
+            title_text="SIVREP - Analisis Estadistico de Validacion",
             title_font_size=18,
             title_font_color="#1e3a5f",
             template="plotly_white",
@@ -655,7 +622,7 @@ class StatisticsEngine:
         with pd.ExcelWriter(buffer, engine="openpyxl") as w:
             df_resultado.to_excel(w, sheet_name="RESULTADOS_DETALLADOS", index=False)
             if "COINCIDE" in df_resultado.columns:
-                df_resultado[df_resultado["COINCIDE"] == "SÍ"].to_excel(w, sheet_name="COINCIDENCIAS", index=False)
+                df_resultado[df_resultado["COINCIDE"] == "SI"].to_excel(w, sheet_name="COINCIDENCIAS", index=False)
                 df_resultado[df_resultado["COINCIDE"] == "NO"].to_excel(w, sheet_name="NO_COINCIDENCIAS", index=False)
             if df_unificado is not None:
                 df_unificado.to_excel(w, sheet_name="LISTADO_UNIFICADO", index=False)
@@ -696,19 +663,19 @@ class StatisticsEngine:
                 ws.auto_filter.ref = ws.dimensions
             wb.save(buffer)
         except Exception as e:
-            logger.error(f"Error formateando Excel: {e}")
+            logger.error("Error formateando Excel: " + str(e))
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 # CONSOLIDADOR UNIFICADO
-# ═══════════════════════════════════════════════════════════════════════════════
+# =============================================================================
 class UnifiedConsolidator:
-    """Genera un listado maestro único a partir de dos fuentes."""
+    """Genera un listado maestro unico a partir de dos fuentes."""
 
     COLUMNAS_PRIORITARIAS = [
         "SISTEMA", "EQUIPO Y SUBEQUIPO", "ESPECIALIDAD", "EQUIPO O REPUESTO",
         "ARTICULO", "FAMILIA", "TAG", "FABRICANTE", "MODELO", "SERIE",
-        "N° PARTE", "NOMBRE", "DESCRIPCION"
+        "N PARTE", "NOMBRE", "DESCRIPCION"
     ]
 
     def __init__(self):
@@ -716,11 +683,11 @@ class UnifiedConsolidator:
 
     def consolidar(self, df_o: pd.DataFrame, df_d: pd.DataFrame,
                    df_res: pd.DataFrame, col_o: str, col_d: str) -> pd.DataFrame:
-        idx_coin = df_res[df_res["COINCIDE"] == "SÍ"]["IDX_ORIGEN"].tolist()
+        idx_coin = df_res[df_res["COINCIDE"] == "SI"]["IDX_ORIGEN"].tolist()
         df_o_m = df_o.copy()
         df_o_m["_ORIGEN"] = "ARCHIVO_1"
         df_o_m["_ESTADO"] = df_o_m.index.map(lambda x: "COINCIDE" if x in idx_coin else "UNICO_A1")
-        idx_t_usados = df_res[df_res["COINCIDE"] == "SÍ"]["IDX_DESTINO"].dropna().astype(int).unique()
+        idx_t_usados = df_res[df_res["COINCIDE"] == "SI"]["IDX_DESTINO"].dropna().astype(int).unique()
         df_d_u = df_d.copy()
         df_d_u = df_d_u[~df_d_u.index.isin(idx_t_usados)]
         df_d_u["_ORIGEN"] = "ARCHIVO_2"
@@ -738,8 +705,8 @@ class UnifiedConsolidator:
         no1, no2 = no1[orden], no2[orden]
         uni = pd.concat([no1, no2], ignore_index=True)
         uni["_FECHA_CONSOLIDACION"] = Utils.ahora()
-        uni["_ID_UNICO"] = [f"REP-{i+1:06d}" for i in range(len(uni))]
-        logger.info(f"Consolidado: {len(uni)} repuestos únicos.")
+        uni["_ID_UNICO"] = ["REP-" + str(i+1).zfill(6) for i in range(len(uni))]
+        logger.info("Consolidado: " + str(len(uni)) + " repuestos unicos.")
         return uni
 
     def _normalizar_cols(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -749,13 +716,13 @@ class UnifiedConsolidator:
             r"EQUIPO\s*Y\s*SUBEQUIPO|EQUIPO\s*SUB|EQUIPO(?!\s*O)": "EQUIPO Y SUBEQUIPO",
             r"ESPECIALIDAD|ESP": "ESPECIALIDAD",
             r"EQUIPO\s*O\s*REPUESTO|REPUESTO|EQUIPO\s*REP": "EQUIPO O REPUESTO",
-            r"ARTICULO|ARTÍCULO|ART(?!I)": "ARTICULO",
+            r"ARTICULO|ARTICULO|ART(?!I)": "ARTICULO",
             r"FAMILIA|FAM": "FAMILIA",
             r"^TAG$|TAG\s*ID": "TAG",
             r"FABRICANTE|FABR|MARCA|MANUFACTURER|MAKER": "FABRICANTE",
             r"MODELO|MODEL(?!O)|MOD(?=ELO)": "MODELO",
             r"SERIE|SER(?!I)|SERIAL": "SERIE",
-            r"N[°\s]*PARTE|PART\s*NO|PART\s*NUMBER|NUMERO\s*PARTE|N\s*PARTE|N°\s*PARTE|PARTE": "N° PARTE",
+            r"N[\u00b0\s]*PARTE|PART\s*NO|PART\s*NUMBER|NUMERO\s*PARTE|N\s*PARTE|N\u00b0\s*PARTE|PARTE": "N PARTE",
             r"NOMBRE|DESCRIPCION|DESCRIPTION|DESC(?!R)": "NOMBRE",
         }
         nuevas = {}
@@ -770,532 +737,3 @@ class UnifiedConsolidator:
                 nuevas[col] = col
         df.rename(columns=nuevas, inplace=True)
         return df
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# INTERFAZ STREAMLIT
-# ═══════════════════════════════════════════════════════════════════════════════
-def init_session_state():
-    """Inicializa variables de sesión."""
-    defaults = {
-        'df_origen': None,
-        'df_destino': None,
-        'df_resultado': None,
-        'df_unificado': None,
-        'df_ocr': None,
-        'motor_archivos': FileReaderEngine(),
-        'motor_ocr': OCREngine(),
-        'matcher': SparePartMatcher(),
-        'stats': StatisticsEngine(),
-        'consolidador': UnifiedConsolidator(),
-        'metricas': None,
-    }
-    for key, val in defaults.items():
-        if key not in st.session_state:
-            st.session_state[key] = val
-
-
-def render_header():
-    """Renderiza encabezado institucional."""
-    st.markdown(f"""
-    <div class='main-header'>
-        🔧 SIVREP CLOUD
-        <div style='font-size: 0.85rem; color: #4a5568; font-weight: 400; margin-top: 0.3rem;'>
-            Sistema Institucional de Validación de Repuestos y Planos Eléctricos v{CONFIG.VERSION}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_sidebar():
-    """Panel lateral de navegación."""
-    st.sidebar.markdown(f"""
-    <div style='text-align: center; padding: 1rem 0; border-bottom: 2px solid #2b6cb0; margin-bottom: 1rem;'>
-        <h2 style='color: #1e3a5f; margin: 0; font-size: 1.4rem;'>🔧 SIVREP</h2>
-        <p style='color: #718096; font-size: 0.8rem; margin: 0.3rem 0 0 0;'>Validación de Repuestos</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.sidebar.markdown("#### 📋 Navegación")
-    pagina = st.sidebar.radio("", [
-        "🏠 Inicio",
-        "📊 Validación de Repuestos",
-        "⚡ Planos Eléctricos (OCR)",
-        "📈 Estadísticas y Reportes"
-    ], label_visibility="collapsed")
-
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("#### ℹ️ Estado del Sistema")
-
-    deps = {
-        "Pandas/OpenPyXL": PANDAS_OK,
-        "PyPDF2/PDFPlumber": PDF_OK,
-        "Pillow": PIL_OK,
-        "Tesseract OCR": TESSERACT_OK,
-        "OpenCV": CV2_OK,
-        "FuzzyWuzzy": FUZZY_OK,
-        "Matplotlib": MATPLOTLIB_OK,
-        "PyMuPDF": PYMUPDF_OK,
-        "Plotly": PLOTLY_OK,
-    }
-
-    for nombre, ok in deps.items():
-        color = "🟢" if ok else "🔴"
-        st.sidebar.markdown(f"{color} {nombre}")
-
-    return pagina
-
-
-def render_home():
-    """Página de inicio."""
-    st.markdown("""
-    <div class='info-box'>
-        <h4 style='margin: 0 0 0.5rem 0; color: #1e3a5f;'>👋 Bienvenido a SIVREP Cloud</h4>
-        <p style='margin: 0; color: #4a5568;'>Sistema Institucional de Validación de Repuestos y Planos Eléctricos</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("""
-        <div class='metric-card'>
-            <div class='metric-label'>Módulo 1</div>
-            <div style='font-size: 1.1rem; font-weight: 600; color: #1e3a5f;'>📊 Validación de Repuestos</div>
-            <p style='color: #718096; font-size: 0.85rem; margin-top: 0.5rem;'>Comparación cruzada de maestros Excel/PDF con fuzzy matching inteligente.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col2:
-        st.markdown("""
-        <div class='metric-card'>
-            <div class='metric-label'>Módulo 2</div>
-            <div style='font-size: 1.1rem; font-weight: 600; color: #1e3a5f;'>⚡ OCR Planos Eléctricos</div>
-            <p style='color: #718096; font-size: 0.85rem; margin-top: 0.5rem;'>Extracción automática de TAGs y Modelos desde planos PDF e imágenes.</p>
-        </div>
-        """, unsafe_allow_html=True)
-    with col3:
-        st.markdown("""
-        <div class='metric-card'>
-            <div class='metric-label'>Módulo 3</div>
-            <div style='font-size: 1.1rem; font-weight: 600; color: #1e3a5f;'>📈 Estadísticas</div>
-            <p style='color: #718096; font-size: 0.85rem; margin-top: 0.5rem;'>Análisis de desempeño, gráficos interactivos y reportes institucionales.</p>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style='margin-top: 2rem;'>
-        <h3 style='color: #2b6cb0;'>✨ Funcionalidades Principales</h3>
-        <ul style='color: #4a5568; line-height: 2;'>
-            <li>📁 Carga de archivos <b>Excel (.xlsx, .xls)</b> y <b>PDF tabulares</b></li>
-            <li>🔍 Comparación semántica difusa (<b>fuzzy matching</b>) con múltiples estrategias</li>
-            <li>📊 Estadísticas completas: coincidencias, cobertura, scores, métodos</li>
-            <li>🏭 Consolidación unificada de listados maestros sin duplicados</li>
-            <li>⚡ <b>OCR</b> de planos eléctricos: extracción de TAGs y Modelos</li>
-            <li>📋 Exportación a <b>Excel con formato institucional</b></li>
-            <li>📈 Gráficos interactivos de análisis de desempeño</li>
-        </ul>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-def render_validacion():
-    """Pestaña de validación de repuestos."""
-    st.markdown("<div class='sub-header'>📊 Validación Cruzada de Repuestos</div>", unsafe_allow_html=True)
-
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("#### 📁 Archivo 1 (Base)")
-        file1 = st.file_uploader("Cargar Excel o PDF", type=['xlsx', 'xls', 'pdf'], key="file1")
-        if file1:
-            try:
-                ext = Path(file1.name).suffix.lower()
-                if ext in ('.xlsx', '.xls'):
-                    st.session_state.df_origen = st.session_state.motor_archivos.read_excel(file1)
-                elif ext == '.pdf':
-                    st.session_state.df_origen = st.session_state.motor_archivos.read_pdf_tablas(file1)
-                st.success(f"✅ {file1.name}: {len(st.session_state.df_origen)} filas x {len(st.session_state.df_origen.columns)} columnas")
-            except Exception as e:
-                st.error(f"Error cargando archivo 1: {e}")
-
-    with col2:
-        st.markdown("#### 📁 Archivo 2 (Comparar)")
-        file2 = st.file_uploader("Cargar Excel o PDF", type=['xlsx', 'xls', 'pdf'], key="file2")
-        if file2:
-            try:
-                ext = Path(file2.name).suffix.lower()
-                if ext in ('.xlsx', '.xls'):
-                    st.session_state.df_destino = st.session_state.motor_archivos.read_excel(file2)
-                elif ext == '.pdf':
-                    st.session_state.df_destino = st.session_state.motor_archivos.read_pdf_tablas(file2)
-                st.success(f"✅ {file2.name}: {len(st.session_state.df_destino)} filas x {len(st.session_state.df_destino.columns)} columnas")
-            except Exception as e:
-                st.error(f"Error cargando archivo 2: {e}")
-
-    if st.session_state.df_origen is not None and st.session_state.df_destino is not None:
-        st.markdown("---")
-        st.markdown("#### ⚙️ Parámetros de Comparación")
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            col_origen = st.selectbox("Columna Archivo 1", st.session_state.df_origen.columns, key="col_o")
-        with col2:
-            col_destino = st.selectbox("Columna Archivo 2", st.session_state.df_destino.columns, key="col_d")
-        with col3:
-            umbral = st.slider("Umbral mínimo (%)", 0, 100, 75)
-        with col4:
-            estrategia = st.selectbox("Estrategia fuzzy", ["weighted", "ratio", "partial", "token_sort", "token_set"])
-
-        max_pal = st.slider("Máx. palabras clave", 1, 10, 4)
-
-        if st.button("▶ EJECUTAR VALIDACIÓN", type="primary", use_container_width=True):
-            with st.spinner("Ejecutando comparación..."):
-                try:
-                    st.session_state.matcher = SparePartMatcher(umbral=umbral, max_palabras=max_pal, estrategia=estrategia)
-                    st.session_state.df_resultado = st.session_state.matcher.comparar_dataframes(
-                        st.session_state.df_origen, col_origen,
-                        st.session_state.df_destino, col_destino
-                    )
-                    st.session_state.df_unificado = st.session_state.consolidador.consolidar(
-                        st.session_state.df_origen, st.session_state.df_destino,
-                        st.session_state.df_resultado, col_origen, col_destino
-                    )
-                    st.session_state.metricas = st.session_state.stats.analizar(
-                        st.session_state.df_resultado,
-                        st.session_state.df_origen,
-                        st.session_state.df_destino
-                    )
-                    st.success("✅ Validación completada exitosamente")
-                except Exception as e:
-                    st.error(f"Error en validación: {e}")
-
-        if st.session_state.df_resultado is not None:
-            st.markdown("---")
-            st.markdown("#### 📋 Resultados de la Comparación")
-
-            m = st.session_state.metricas
-            if m:
-                c1, c2, c3, c4, c5 = st.columns(5)
-                with c1:
-                    st.markdown(f"""
-                    <div class='metric-card'>
-                        <div class='metric-label'>Comparados</div>
-                        <div class='metric-value'>{m['comparados']:,}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with c2:
-                    st.markdown(f"""
-                    <div class='metric-card'>
-                        <div class='metric-label'>Coincidencias</div>
-                        <div class='metric-value status-ok'>{m['coincidencias']:,}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with c3:
-                    st.markdown(f"""
-                    <div class='metric-card'>
-                        <div class='metric-label'>No Coincidencias</div>
-                        <div class='metric-value status-danger'>{m['no_coincidencias']:,}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with c4:
-                    st.markdown(f"""
-                    <div class='metric-card'>
-                        <div class='metric-label'>Tasa Éxito</div>
-                        <div class='metric-value'>{m['tasa_exito']:.1f}%</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with c5:
-                    st.markdown(f"""
-                    <div class='metric-card'>
-                        <div class='metric-label'>Score Promedio</div>
-                        <div class='metric-value'>{m['score_promedio']:.1f}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            tab_res, tab_coin, tab_nocoin, tab_unif = st.tabs([
-                "📋 Resultados Detallados",
-                "✅ Coincidencias",
-                "❌ No Coincidencias",
-                "📝 Listado Unificado"
-            ])
-
-            with tab_res:
-                st.dataframe(st.session_state.df_resultado, use_container_width=True)
-            with tab_coin:
-                coin_df = st.session_state.df_resultado[st.session_state.df_resultado["COINCIDE"] == "SÍ"]
-                st.dataframe(coin_df, use_container_width=True)
-            with tab_nocoin:
-                nocoin_df = st.session_state.df_resultado[st.session_state.df_resultado["COINCIDE"] == "NO"]
-                st.dataframe(nocoin_df, use_container_width=True)
-            with tab_unif:
-                if st.session_state.df_unificado is not None:
-                    st.dataframe(st.session_state.df_unificado, use_container_width=True)
-
-            st.markdown("---")
-            st.markdown("#### 💾 Exportar Resultados")
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📊 Exportar Reporte Completo (Excel)", use_container_width=True):
-                    excel_bytes = st.session_state.stats.generar_excel(
-                        st.session_state.df_resultado,
-                        st.session_state.df_unificado
-                    )
-                    st.download_button(
-                        label="⬇️ Descargar Excel",
-                        data=excel_bytes,
-                        file_name=f"REPORTE_SIVREP_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                    )
-            with col2:
-                if st.session_state.df_unificado is not None:
-                    buffer = io.BytesIO()
-                    st.session_state.df_unificado.to_excel(buffer, index=False, sheet_name="UNIFICADO")
-                    st.download_button(
-                        label="⬇️ Descargar Listado Unificado",
-                        data=buffer.getvalue(),
-                        file_name=f"LISTADO_UNIFICADO_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                    )
-
-
-
-def render_ocr():
-    """Pestaña de OCR para planos eléctricos."""
-    st.markdown("<div class='sub-header'>⚡ Extracción OCR de Planos Eléctricos</div>", unsafe_allow_html=True)
-
-    if not TESSERACT_OK:
-        st.error("🔴 Tesseract OCR no está disponible. En Streamlit Cloud, OCR requiere instalación del motor Tesseract en el sistema operativo, lo cual no está soportado en la versión gratuita.")
-        st.info("💡 Alternativa: Use la versión local de SIVREP para procesar planos con OCR completo.")
-        return
-
-    if not PYMUPDF_OK:
-        st.warning("🟡 PyMuPDF no instalado. La conversión de PDF a imágenes puede no funcionar.")
-
-    st.markdown("#### 📁 Cargar Plano Eléctrico")
-    file_plano = st.file_uploader("PDF o Imagen (PNG, JPG, TIFF)", type=['pdf', 'png', 'jpg', 'jpeg', 'tiff'], key="plano")
-
-    if file_plano:
-        st.success(f"✅ Archivo cargado: {file_plano.name}")
-
-        if st.button("▶ PROCESAR OCR", type="primary", use_container_width=True):
-            with st.spinner("Procesando OCR... Esto puede tomar varios minutos para archivos grandes."):
-                try:
-                    ext = Path(file_plano.name).suffix.lower()
-                    if ext == '.pdf':
-                        resultados = st.session_state.motor_ocr.procesar_pdf(file_plano)
-                    else:
-                        # Guardar imagen temporal
-                        img_path = Path(CONFIG.TEMP_DIR) / file_plano.name
-                        with open(img_path, "wb") as f:
-                            f.write(file_plano.getvalue())
-                        resultados = st.session_state.motor_ocr.procesar_imagen(str(img_path))
-
-                    st.session_state.df_ocr = pd.DataFrame(resultados)
-                    st.success(f"✅ OCR completado: {len(resultados)} componentes detectados")
-                except Exception as e:
-                    st.error(f"Error en OCR: {e}")
-                    logger.error(traceback.format_exc())
-
-    if st.session_state.df_ocr is not None and len(st.session_state.df_ocr) > 0:
-        st.markdown("---")
-        st.markdown("#### 📋 Componentes Detectados")
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tags_ok = (st.session_state.df_ocr['TAG'] != 'NO_IDENTIFICADO').sum()
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-label'>TAGs Identificados</div>
-                <div class='metric-value status-ok'>{tags_ok}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            modelos_ok = (st.session_state.df_ocr['MODELO'] != 'NO_IDENTIFICADO').sum()
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-label'>Modelos Identificados</div>
-                <div class='metric-value status-ok'>{modelos_ok}</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"""
-            <div class='metric-card'>
-                <div class='metric-label'>Total Componentes</div>
-                <div class='metric-value'>{len(st.session_state.df_ocr)}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.dataframe(st.session_state.df_ocr, use_container_width=True)
-
-        # Log de procesamiento
-        with st.expander("📝 Log de Procesamiento"):
-            for _, row in st.session_state.df_ocr.head(50).iterrows():
-                st.text(f"TAG: {row['TAG']:<22} | MODELO: {row['MODELO']:<20} | MÉTODO: {row['METODO_EXTRACCION']}")
-
-        # Exportar OCR
-        st.markdown("---")
-        if st.button("💾 Exportar Resultados OCR (Excel)", use_container_width=True):
-            buffer = io.BytesIO()
-            st.session_state.df_ocr.to_excel(buffer, index=False, sheet_name="COMPONENTES")
-            st.download_button(
-                label="⬇️ Descargar Excel OCR",
-                data=buffer.getvalue(),
-                file_name=f"OCR_PLANOS_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-
-
-def render_estadisticas():
-    """Pestaña de estadísticas y reportes."""
-    st.markdown("<div class='sub-header'>📈 Estadísticas y Reportes Institucionales</div>", unsafe_allow_html=True)
-
-    if st.session_state.metricas is None:
-        st.info("Ejecute una validación de repuestos para generar estadísticas.")
-        return
-
-    m = st.session_state.metricas
-
-    # Métricas principales
-    st.markdown("#### 📊 Métricas de Desempeño")
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    with c1:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Total Origen</div>
-            <div class='metric-value'>{m['total_origen']:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Total Destino</div>
-            <div class='metric-value'>{m['total_destino']:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Comparados</div>
-            <div class='metric-value'>{m['comparados']:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c4:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Coincidencias</div>
-            <div class='metric-value status-ok'>{m['coincidencias']:,}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c5:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Tasa Éxito</div>
-            <div class='metric-value'>{m['tasa_exito']:.2f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c6:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Cobertura</div>
-            <div class='metric-value'>{m['cobertura']:.2f}%</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Scores
-    st.markdown("#### 📉 Distribución de Scores")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Score Promedio</div>
-            <div class='metric-value'>{m['score_promedio']:.2f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Score Mínimo</div>
-            <div class='metric-value'>{m['score_min']:.2f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""
-        <div class='metric-card'>
-            <div class='metric-label'>Score Máximo</div>
-            <div class='metric-value'>{m['score_max']:.2f}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # Gráficos interactivos
-    if PLOTLY_OK and st.session_state.stats.reporte:
-        st.markdown("---")
-        st.markdown("#### 📈 Gráficos Interactivos")
-        fig = st.session_state.stats.generar_graficos_plotly()
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-
-    # Distribución de métodos
-    if "metodos" in m:
-        st.markdown("---")
-        st.markdown("#### 🔍 Distribución de Métodos de Coincidencia")
-        met_df = pd.DataFrame(list(m["metodos"].items()), columns=["Método", "Cantidad"])
-        st.bar_chart(met_df.set_index("Método"))
-
-    # Reporte JSON
-    st.markdown("---")
-    st.markdown("#### 📋 Reporte JSON Completo")
-    with st.expander("Ver reporte JSON"):
-        st.json(m)
-
-    # Exportar reporte
-    st.markdown("---")
-    if st.button("💾 Exportar Reporte Completo (Excel)", use_container_width=True):
-        if st.session_state.df_resultado is not None:
-            excel_bytes = st.session_state.stats.generar_excel(
-                st.session_state.df_resultado,
-                st.session_state.df_unificado
-            )
-            st.download_button(
-                label="⬇️ Descargar Excel",
-                data=excel_bytes,
-                file_name=f"REPORTE_SIVREP_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# PUNTO DE ENTRADA
-# ═══════════════════════════════════════════════════════════════════════════════
-def main():
-    st.set_page_config(
-        page_title="SIVREP Cloud — Validación de Repuestos",
-        page_icon="🔧",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
-
-    init_session_state()
-    render_header()
-    pagina = render_sidebar()
-
-    if pagina == "🏠 Inicio":
-        render_home()
-    elif pagina == "📊 Validación de Repuestos":
-        render_validacion()
-    elif pagina == "⚡ Planos Eléctricos (OCR)":
-        render_ocr()
-    elif pagina == "📈 Estadísticas y Reportes":
-        render_estadisticas()
-
-    st.markdown("""
-    <div class='footer'>
-        SIVREP Cloud v3.1.0 | Departamento de Ingeniería<br>
-        Sistema Institucional de Validación de Repuestos y Planos Eléctricos
-    </div>
-    """, unsafe_allow_html=True)
-
-
-if __name__ == "__main__":
-    main()
