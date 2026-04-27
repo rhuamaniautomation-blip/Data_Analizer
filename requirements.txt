@@ -1,0 +1,24 @@
+# ==============================================================================
+# PROANALYTICS v2.1 - Requirements
+# Sistema Institucional de Análisis de Datos de Procesos Industriales
+# ==============================================================================
+# Framework principal
+streamlit>=1.28.0
+
+# Manipulación y análisis de datos
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualización interactiva
+plotly>=5.18.0
+
+# Cálculos estadísticos y científicos
+scipy>=1.11.0
+
+# Lectura/Escritura de archivos Excel
+openpyxl>=3.1.0
+
+# Dependencias transitivas (incluidas por compatibilidad en Streamlit Cloud)
+# Estas se instalan automáticamente, pero se listan para referencia:
+# pillow>=10.0.0        # Requerido por kaleido para exportación de imágenes
+# kaleido>=0.2.1        # Motor de renderizado para exportar Plotly a PNG/SVG
